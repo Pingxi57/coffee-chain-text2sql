@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from llm import ask_llm
+from guard import check_sql
 from schema_context import build_schema_text, get_connection
 
 CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context"
@@ -69,9 +70,11 @@ def generate_sql(question: str, schema: str, use_glossary=True, use_examples=Tru
 
 
 def run_sql(sql: str, max_rows: int = 500) -> pd.DataFrame:
+    sql = check_sql(sql)
     conn = get_connection()
     try:
         cur = conn.cursor(buffered=True)
+        cur.execute("SET SESSION MAX_EXECUTION_TIME = 10000")  # 10 s per query
         cur.execute(sql)
         headers = [d[0] for d in cur.description]
         rows = cur.fetchmany(max_rows)

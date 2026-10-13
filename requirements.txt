@@ -4,3 +4,4 @@ sqlglot
 streamlit
 pandas
 google-genai
+pytest
