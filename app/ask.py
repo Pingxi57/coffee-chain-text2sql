@@ -1,23 +1,44 @@
 """Core pipeline: question -> SQL -> result. Also runnable from the terminal."""
 import re
 import sys
+from pathlib import Path
 
 import pandas as pd
 
 from llm import ask_llm
 from schema_context import build_schema_text, get_connection
 
+CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context"
+
 PROMPT_TEMPLATE = """You are an expert MySQL 8 analyst for a coffee-chain database.
-Write ONE MySQL SELECT query that answers the question.
-Use only the tables, views and columns in the schema below.
-The question may be in Thai or English.
-Return only the SQL, with no explanation.
+Write ONE MySQL SELECT query (CTEs are allowed) that answers the question.
+- Use only the tables, views and columns in the schema.
+- Follow the business rules exactly.
+- The question may be in Thai or English.
+- Return only the SQL, with no explanation and no markdown.
 
 Schema:
 {schema}
-
+{glossary}{examples}
 Question: {question}
 SQL:"""
+
+
+def load_glossary() -> str:
+    return (CONTEXT_DIR / "glossary.md").read_text(encoding="utf-8")
+
+
+def load_examples() -> str:
+    text = (CONTEXT_DIR / "examples.sql").read_text(encoding="utf-8")
+    blocks = []
+    for chunk in text.split("-- Question:")[1:]:
+        question, _, sql = chunk.partition("\n")
+        blocks.append(f"Question: {question.strip()}\nSQL:\n{sql.strip()}")
+    return "\n\n".join(blocks)
+
+
+GLOSSARY = load_glossary()
+EXAMPLES = load_examples()
 
 
 def clean_sql(text: str) -> str:
@@ -34,8 +55,17 @@ def load_schema() -> str:
         conn.close()
 
 
-def generate_sql(question: str, schema: str) -> str:
-    return clean_sql(ask_llm(PROMPT_TEMPLATE.format(schema=schema, question=question)))
+def build_prompt(question: str, schema: str, use_glossary=True, use_examples=True) -> str:
+    glossary = f"\nBusiness rules:\n{GLOSSARY}\n" if use_glossary else ""
+    examples = f"\nExamples:\n{EXAMPLES}\n" if use_examples else ""
+    return PROMPT_TEMPLATE.format(
+        schema=schema, glossary=glossary, examples=examples, question=question
+    )
+
+
+def generate_sql(question: str, schema: str, use_glossary=True, use_examples=True) -> str:
+    prompt = build_prompt(question, schema, use_glossary, use_examples)
+    return clean_sql(ask_llm(prompt))
 
 
 def run_sql(sql: str, max_rows: int = 500) -> pd.DataFrame:
