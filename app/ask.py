@@ -1,6 +1,8 @@
-"""Prototype: question -> SQL -> result, in the terminal."""
+"""Core pipeline: question -> SQL -> result. Also runnable from the terminal."""
 import re
 import sys
+
+import pandas as pd
 
 from llm import ask_llm
 from schema_context import build_schema_text, get_connection
@@ -24,22 +26,43 @@ def clean_sql(text: str) -> str:
     return text.strip().rstrip(";")
 
 
+def load_schema() -> str:
+    conn = get_connection()
+    try:
+        return build_schema_text(conn)
+    finally:
+        conn.close()
+
+
+def generate_sql(question: str, schema: str) -> str:
+    return clean_sql(ask_llm(PROMPT_TEMPLATE.format(schema=schema, question=question)))
+
+
+def run_sql(sql: str, max_rows: int = 500) -> pd.DataFrame:
+    conn = get_connection()
+    try:
+        cur = conn.cursor(buffered=True)
+        cur.execute(sql)
+        headers = [d[0] for d in cur.description]
+        rows = cur.fetchmany(max_rows)
+        cur.close()
+    finally:
+        conn.close()
+    df = pd.DataFrame(rows, columns=headers)
+    # MySQL DECIMAL comes back as text-like objects; make them real numbers
+    for col in df.columns:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except (ValueError, TypeError):
+            pass
+    return df
+
+
 def main():
     question = " ".join(sys.argv[1:]) or "Which 5 branches had the highest revenue?"
-    conn = get_connection()
-    schema = build_schema_text(conn)
-
-    sql = clean_sql(ask_llm(PROMPT_TEMPLATE.format(schema=schema, question=question)))
+    sql = generate_sql(question, load_schema())
     print("SQL:\n" + sql + "\n")
-
-    cur = conn.cursor()
-    cur.execute(sql)
-    headers = [d[0] for d in cur.description]
-    print(" | ".join(headers))
-    for row in cur.fetchmany(20):
-        print(" | ".join(str(v) for v in row))
-    cur.close()
-    conn.close()
+    print(run_sql(sql).head(20).to_string(index=False))
 
 
 if __name__ == "__main__":
