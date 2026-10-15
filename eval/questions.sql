@@ -130,6 +130,7 @@ JOIN Orders o ON o.Order_ID = d.Order_ID
 JOIN Branch b ON b.Branch_ID = o.Branch_ID
 WHERE d.Delivery_Status = 'Delivered'
   AND o.Order_Status <> 'Cancelled'
+  AND o.Order_DateTime < '2026-10-01'
 GROUP BY b.Branch_ID, b.Branch_Name
 ORDER BY Avg_Delivery_Minutes DESC
 LIMIT 5;
