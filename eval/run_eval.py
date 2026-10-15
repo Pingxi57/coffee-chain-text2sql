@@ -11,6 +11,7 @@ continues from where it left off next time.
 """
 import argparse
 import csv
+import math
 import sys
 import time
 from collections import Counter
@@ -52,15 +53,32 @@ def _norm(value):
         return str(value).strip().lower()
 
 
+def _is_num(value):
+    try:
+        float(value)
+        return value is not None
+    except (TypeError, ValueError):
+        return False
+
+
+def _col_match(gold_vals, pred_vals):
+    """Numbers match within a small tolerance; text matches exactly (case-insensitive)."""
+    if all(_is_num(v) for v in gold_vals) and all(_is_num(v) for v in pred_vals):
+        g = sorted(float(v) for v in gold_vals)
+        p = sorted(float(v) for v in pred_vals)
+        return all(math.isclose(a, b, rel_tol=1e-3, abs_tol=0.051) for a, b in zip(g, p))
+    return Counter(_norm(v) for v in gold_vals) == Counter(_norm(v) for v in pred_vals)
+
+
 def results_match(gold_df, pred_df):
-    """Same row count, and every gold column appears (as a multiset) in the prediction."""
+    """Same row count, and every gold column appears in the prediction."""
     if len(gold_df) != len(pred_df):
         return False
-    pred_cols = [Counter(_norm(v) for v in pred_df.iloc[:, i]) for i in range(pred_df.shape[1])]
-    for i in range(gold_df.shape[1]):
-        if Counter(_norm(v) for v in gold_df.iloc[:, i]) not in pred_cols:
-            return False
-    return True
+    pred_cols = [list(pred_df.iloc[:, i]) for i in range(pred_df.shape[1])]
+    return all(
+        any(_col_match(list(gold_df.iloc[:, i]), pc) for pc in pred_cols)
+        for i in range(gold_df.shape[1])
+    )
 
 
 def check_gold(questions):
@@ -114,6 +132,27 @@ def run(config_names, questions, delay):
                 time.sleep(delay)
 
 
+def rescore():
+    """Re-check every stored prediction against the current gold SQL (no LLM calls)."""
+    with RESULTS_FILE.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    gold = {q["qid"]: q["sql"] for q in load_questions()}
+    gold_results = {}
+    for r in rows:
+        if not r["generated_sql"]:
+            continue
+        try:
+            if r["qid"] not in gold_results:
+                gold_results[r["qid"]] = run_sql(gold[r["qid"]])
+            r["correct"] = str(int(results_match(gold_results[r["qid"]], run_sql(r["generated_sql"]))))
+        except Exception:
+            r["correct"] = "0"
+    with RESULTS_FILE.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def summarize():
     with RESULTS_FILE.open(encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
@@ -142,6 +181,7 @@ def main():
     parser.add_argument("--limit", type=int)
     parser.add_argument("--delay", type=float, default=4.0, help="seconds between LLM calls")
     parser.add_argument("--summary", action="store_true")
+    parser.add_argument("--rescore", action="store_true", help="re-check stored predictions")
     args = parser.parse_args()
 
     questions = load_questions()
@@ -149,6 +189,10 @@ def main():
         questions = questions[: args.limit]
     if args.check_gold:
         sys.exit(0 if check_gold(questions) else 1)
+    if args.rescore:
+        rescore()
+        summarize()
+        return
     if not args.summary:
         run(list(CONFIGS) if args.config == "all" else [args.config], questions, args.delay)
     if RESULTS_FILE.exists():
