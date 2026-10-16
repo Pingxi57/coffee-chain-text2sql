@@ -1,5 +1,6 @@
 """Read the database schema and turn it into compact text for the LLM prompt."""
 import os
+import re
 from collections import defaultdict
 
 import mysql.connector
@@ -23,7 +24,14 @@ def _s(value):
     return value.decode() if isinstance(value, (bytes, bytearray)) else value
 
 
-def build_schema_text(conn) -> str:
+def _clean_check(clause: str) -> str:
+    # (`Branch_Status` in (_utf8mb4'Open',...)) -> Branch_Status in ('Open',...)
+    clause = re.sub(r"_utf8mb4", "", clause)
+    clause = clause.replace("\\'", "'").replace("`", "")
+    return clause.strip()
+
+
+def build_schema_text(conn, include_checks: bool = False) -> str:
     db = os.getenv("DB_NAME")
     cur = conn.cursor()
 
@@ -56,16 +64,36 @@ def build_schema_text(conn) -> str:
         (db,),
     )
     fks = [f"{_s(t)}.{_s(c)} -> {_s(rt)}.{_s(rc)}" for t, c, rt, rc in cur.fetchall()]
+
+    checks = []
+    if include_checks:
+        cur.execute(
+            """
+            SELECT tc.TABLE_NAME, cc.CHECK_CLAUSE
+            FROM information_schema.TABLE_CONSTRAINTS tc
+            JOIN information_schema.CHECK_CONSTRAINTS cc
+              ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+             AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+            WHERE tc.CONSTRAINT_SCHEMA = %s AND tc.CONSTRAINT_TYPE = 'CHECK'
+            ORDER BY tc.TABLE_NAME
+            """,
+            (db,),
+        )
+        checks = [f"{_s(t)}: {_clean_check(_s(clause))}" for t, clause in cur.fetchall()]
     cur.close()
 
     lines = [f"{kinds[t]} {t}({', '.join(cols)})" for t, cols in columns.items()]
     lines.append("")
     lines.append("Foreign keys:")
     lines.extend(fks)
+    if checks:
+        lines.append("")
+        lines.append("Allowed values and rules (CHECK constraints):")
+        lines.extend(checks)
     return "\n".join(lines)
 
 
 if __name__ == "__main__":
     conn = get_connection()
-    print(build_schema_text(conn))
+    print(build_schema_text(conn, include_checks=True))
     conn.close()

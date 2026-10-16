@@ -48,10 +48,10 @@ def clean_sql(text: str) -> str:
     return text.strip().rstrip(";")
 
 
-def load_schema() -> str:
+def load_schema(include_checks: bool = False) -> str:
     conn = get_connection()
     try:
-        return build_schema_text(conn)
+        return build_schema_text(conn, include_checks=include_checks)
     finally:
         conn.close()
 

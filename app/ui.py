@@ -33,7 +33,7 @@ EXAMPLES = [
 
 @st.cache_resource
 def cached_schema():
-    return load_schema()
+    return load_schema(include_checks=True)
 
 
 @st.cache_data(show_spinner=False)

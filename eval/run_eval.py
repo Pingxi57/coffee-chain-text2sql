@@ -30,6 +30,7 @@ CONFIGS = {
     "glossary": dict(use_glossary=True, use_examples=False),
     "examples": dict(use_glossary=False, use_examples=True),
     "full": dict(use_glossary=True, use_examples=True),
+    "full_v2": dict(use_glossary=True, use_examples=True, checks=True),
 }
 FIELDS = ["config", "qid", "level", "question", "correct", "error", "generated_sql"]
 
@@ -103,7 +104,7 @@ def load_done():
 
 
 def run(config_names, questions, delay):
-    schema = load_schema()
+    schemas = {False: load_schema(), True: load_schema(include_checks=True)}
     done = load_done()
     new_file = not RESULTS_FILE.exists()
     with RESULTS_FILE.open("a", newline="", encoding="utf-8") as f:
@@ -117,7 +118,9 @@ def run(config_names, questions, delay):
                 row = {"config": name, "qid": q["qid"], "level": q["level"],
                        "question": q["question"], "correct": 0, "error": "", "generated_sql": ""}
                 try:
-                    sql = generate_sql(q["question"], schema, **CONFIGS[name])
+                    cfg = dict(CONFIGS[name])
+                    checks = cfg.pop("checks", False)
+                    sql = generate_sql(q["question"], schemas[checks], **cfg)
                     row["generated_sql"] = sql
                     row["correct"] = int(results_match(run_sql(q["sql"]), run_sql(sql)))
                 except Exception as e:

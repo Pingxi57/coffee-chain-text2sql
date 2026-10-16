@@ -215,3 +215,13 @@ FROM v_daily_branch_sales
 WHERE Sales_Date >= '2026-01-01' AND Sales_Date < '2026-10-01'
 ORDER BY Net_Sales DESC
 LIMIT 1"
+schema_only,Q01,easy,มีสาขาทั้งหมดกี่สาขา,1,,SELECT COUNT(*) FROM Branch
+schema_only,Q02,easy,How many Drive Thru branches are there?,1,,SELECT COUNT(*) FROM Branch WHERE Store_Type = 'Drive Thru'
+schema_only,Q03,easy,มีเมนูเครื่องดื่มที่ยังขายอยู่กี่รายการ,1,,SELECT COUNT(*) FROM Product WHERE Type_Product = 'Beverage' AND Is_Active = 1
+schema_only,Q04,easy,What is the most expensive product?,0,,SELECT Product_Name FROM Product ORDER BY Base_Price DESC LIMIT 1
+schema_only,Q05,easy,สมาชิกที่ถูกแบนมีกี่คน,1,,SELECT COUNT(*) FROM Member WHERE Member_Status = 'Banned'
+schema_only,Q06,easy,How many orders were cancelled in September 2026?,1,,"SELECT COUNT(Order_ID)
+FROM Orders
+WHERE Order_Status = 'Cancelled'
+  AND Order_DateTime >= '2026-09-01'
+  AND Order_DateTime < '2026-10-01'"
