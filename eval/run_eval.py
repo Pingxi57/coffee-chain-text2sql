@@ -103,6 +103,25 @@ def load_done():
         return {(r["config"], r["qid"]) for r in csv.DictReader(f)}
 
 
+class DailyQuotaError(Exception):
+    """The daily free quota is used up; stop and continue another day."""
+
+
+def generate_with_retry(question, schema, cfg, waits=(65, 65, 65)):
+    """Wait and retry on per-minute rate limits; raise DailyQuotaError on the daily limit."""
+    for wait in (*waits, None):
+        try:
+            return generate_sql(question, schema, **cfg)
+        except Exception as e:
+            msg = str(e)
+            if "429" not in msg and "RESOURCE_EXHAUSTED" not in msg:
+                raise
+            if "PerDay" in msg or wait is None:
+                raise DailyQuotaError(msg) from e
+            print(f"   rate limit hit, waiting {wait}s...")
+            time.sleep(wait)
+
+
 def run(config_names, questions, delay):
     schemas = {False: load_schema(), True: load_schema(include_checks=True)}
     done = load_done()
@@ -120,13 +139,13 @@ def run(config_names, questions, delay):
                 try:
                     cfg = dict(CONFIGS[name])
                     checks = cfg.pop("checks", False)
-                    sql = generate_sql(q["question"], schemas[checks], **cfg)
+                    sql = generate_with_retry(q["question"], schemas[checks], cfg)
                     row["generated_sql"] = sql
                     row["correct"] = int(results_match(run_sql(q["sql"]), run_sql(sql)))
                 except Exception as e:
                     msg = str(e)
-                    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                        print("Quota reached - stopping. Run the same command later to continue.")
+                    if isinstance(e, DailyQuotaError):
+                        print("Daily quota reached - stopping. Run the same command tomorrow to continue.")
                         return
                     row["error"] = msg[:300]
                 writer.writerow(row)
@@ -182,7 +201,7 @@ def main():
     parser.add_argument("--check-gold", action="store_true")
     parser.add_argument("--config", default="full", choices=[*CONFIGS, "all"])
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--delay", type=float, default=4.0, help="seconds between LLM calls")
+    parser.add_argument("--delay", type=float, default=10.0, help="seconds between LLM calls")
     parser.add_argument("--summary", action="store_true")
     parser.add_argument("--rescore", action="store_true", help="re-check stored predictions")
     args = parser.parse_args()

@@ -225,3 +225,33 @@ FROM Orders
 WHERE Order_Status = 'Cancelled'
   AND Order_DateTime >= '2026-09-01'
   AND Order_DateTime < '2026-10-01'"
+schema_only,Q07,easy,ยอดขายสุทธิเมื่อวานของทุกสาขารวมกัน,0,,SELECT SUM(Net_Sales) FROM v_daily_branch_sales WHERE Sales_Date = CURDATE() - INTERVAL 1 DAY
+schema_only,Q08,easy,Which branches are under renovation?,0,,SELECT Branch_Name FROM Branch WHERE Branch_Status = 'Renovating'
+schema_only,Q09,easy,มีบัตร Starbucks Card ที่ถูกบล็อกกี่ใบ,1,,SELECT COUNT(*) FROM Starbucks_Card WHERE Card_Status = 'Blocked'
+schema_only,Q10,easy,How many members registered in 2026?,1,,SELECT COUNT(*) FROM Member WHERE YEAR(Registration_Date) = 2026
+schema_only,Q11,medium,ยอดขายสุทธิของแต่ละประเภทออเดอร์ในเดือนกันยายน 2026,0,,"SELECT Order_Type, SUM(Net_Amount) AS Total_Net_Sales
+FROM v_order_summary
+WHERE Order_Date BETWEEN '2026-09-01' AND '2026-09-30'
+GROUP BY Order_Type"
+schema_only,Q12,medium,What was the revenue for each payment method in 2026?,1,,"SELECT Payment_Method, SUM(Amount) AS Total_Revenue
+FROM Payment
+WHERE YEAR(Paid_At) = 2026
+GROUP BY Payment_Method"
+full_v2,Q01,easy,มีสาขาทั้งหมดกี่สาขา,1,,SELECT COUNT(*) AS Total_Branches FROM Branch
+full_v2,Q02,easy,How many Drive Thru branches are there?,1,,"SELECT COUNT(*) AS Drive_Thru_Count
+FROM Branch
+WHERE Store_Type = 'Drive Thru'"
+full_v2,Q03,easy,มีเมนูเครื่องดื่มที่ยังขายอยู่กี่รายการ,1,,"SELECT COUNT(*) AS Active_Beverage_Count
+FROM Product
+WHERE Type_Product = 'Beverage' AND Is_Active = 1"
+full_v2,Q04,easy,What is the most expensive product?,1,,"SELECT Product_Name, Base_Price
+FROM Product
+ORDER BY Base_Price DESC
+LIMIT 1"
+full_v2,Q05,easy,สมาชิกที่ถูกแบนมีกี่คน,1,,"SELECT COUNT(*) AS Banned_Member_Count
+FROM Member
+WHERE Member_Status = 'Banned'"
+full_v2,Q06,easy,How many orders were cancelled in September 2026?,1,,"SELECT COUNT(*) AS Cancelled_Orders
+FROM Orders
+WHERE Order_Status = 'Cancelled'
+  AND Order_DateTime >= '2026-09-01' AND Order_DateTime < '2026-10-01'"
