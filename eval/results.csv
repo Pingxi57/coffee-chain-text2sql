@@ -255,3 +255,45 @@ full_v2,Q06,easy,How many orders were cancelled in September 2026?,1,,"SELECT CO
 FROM Orders
 WHERE Order_Status = 'Cancelled'
   AND Order_DateTime >= '2026-09-01' AND Order_DateTime < '2026-10-01'"
+schema_only,Q13,medium,เมนูอาหารที่ขายได้จำนวนชิ้นมากที่สุด 5 อันดับในปี 2026,0,,"SELECT p.Product_Name, SUM(oi.Quantity) AS Total_Quantity
+FROM Product p
+JOIN Order_Item oi ON p.Product_ID = oi.Product_ID
+JOIN Orders o ON oi.Order_ID = o.Order_ID
+WHERE p.Type_Product = 'Food' AND YEAR(o.Order_DateTime) = 2026
+GROUP BY p.Product_ID, p.Product_Name
+ORDER BY Total_Quantity DESC
+LIMIT 5"
+schema_only,Q14,medium,What is the average net order value for each store type over the last 3 months?,0,,"SELECT Store_Type, AVG(Net_Amount) AS Avg_Net_Order_Value
+FROM v_order_summary
+WHERE Order_DateTime >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+GROUP BY Store_Type"
+schema_only,Q15,medium,สาขาไหนมีออเดอร์ถูกยกเลิกมากที่สุด 5 อันดับ,0,,"SELECT Branch_Name, COUNT(Order_ID) AS Cancelled_Count
+FROM v_order_summary
+WHERE Order_Status = 'Cancelled'
+GROUP BY Branch_ID, Branch_Name
+ORDER BY Cancelled_Count DESC
+LIMIT 5"
+schema_only,Q16,medium,How many orders and how much net sales did each month of 2026 have?,0,,"SELECT
+  MONTH(Sales_Date) AS Month,
+  SUM(Orders) AS Total_Orders,
+  SUM(Net_Sales) AS Total_Net_Sales
+FROM v_daily_branch_sales
+WHERE YEAR(Sales_Date) = 2026
+GROUP BY MONTH(Sales_Date)"
+schema_only,Q17,medium,ลูกค้า Gold กับ Green จ่ายเงินเฉลี่ยต่อออเดอร์เท่าไร,1,,"SELECT Member_Level, AVG(Paid_Amount) FROM v_order_summary WHERE Member_Level IN ('Gold', 'Green') GROUP BY Member_Level"
+schema_only,Q18,medium,Which 10 members spent the most money in 2026?,0,,"SELECT Member_ID, Member_Name, SUM(Paid_Amount) AS Total_Spent FROM v_order_summary WHERE YEAR(Order_Date) = 2026 AND Member_ID IS NOT NULL GROUP BY Member_ID, Member_Name ORDER BY Total_Spent DESC LIMIT 10"
+schema_only,Q19,medium,แต่ละโปรโมชันให้ส่วนลดไปรวมเท่าไร,1,,"SELECT Promotion_ID, Promotion_Name, SUM(Discount) AS Total_Discount
+FROM v_order_summary
+WHERE Promotion_ID IS NOT NULL
+GROUP BY Promotion_ID, Promotion_Name"
+schema_only,Q20,medium,What percentage of orders in 2026 were delivery orders?,1,,"SELECT (COUNT(CASE WHEN Order_Type = 'Delivery' THEN 1 END) * 100.0 / COUNT(*)) AS delivery_percentage
+FROM Orders
+WHERE YEAR(Order_DateTime) = 2026"
+schema_only,Q21,medium,5 สาขาที่จัดส่งเดลิเวอรีใช้เวลาเฉลี่ยนานที่สุด,0,,"SELECT b.Branch_Name, AVG(TIMESTAMPDIFF(SECOND, o.Order_DateTime, d.Delivered_At)) AS Average_Delivery_Time
+FROM Branch b
+JOIN Orders o ON b.Branch_ID = o.Branch_ID
+JOIN Delivery d ON o.Order_ID = d.Order_ID
+WHERE d.Delivered_At IS NOT NULL
+GROUP BY b.Branch_ID, b.Branch_Name
+ORDER BY Average_Delivery_Time DESC
+LIMIT 5"
