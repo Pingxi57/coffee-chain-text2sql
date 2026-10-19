@@ -1,4 +1,4 @@
--- Evaluation set: 30 questions with gold SQL (10 easy, 12 medium, 10 hard... see levels).
+-- Evaluation set: 30 questions with gold SQL (10 easy, 12 medium, 8 hard).
 -- Format: "-- Q<id> | <level> | <question>" then the gold SQL.
 -- These questions are deliberately different from context/examples.sql.
 
