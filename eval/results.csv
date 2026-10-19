@@ -466,3 +466,113 @@ WHERE p.Payment_Status = 'Success'
 GROUP BY m.Member_ID, m.Member_Name
 ORDER BY Total_Spent DESC
 LIMIT 10"
+full_v2,Q19,medium,แต่ละโปรโมชันให้ส่วนลดไปรวมเท่าไร,1,,"SELECT Promotion_Name, SUM(Discount) AS Total_Discount
+FROM v_order_summary
+WHERE Order_Status <> 'Cancelled'
+  AND Order_DateTime < '2026-10-01'
+  AND Promotion_ID IS NOT NULL
+GROUP BY Promotion_ID, Promotion_Name
+ORDER BY Total_Discount DESC"
+full_v2,Q20,medium,What percentage of orders in 2026 were delivery orders?,1,,"SELECT ROUND(100 * SUM(CASE WHEN Order_Type = 'Delivery' THEN 1 ELSE 0 END) / COUNT(*), 2) AS Delivery_Pct
+FROM Orders
+WHERE Order_Status <> 'Cancelled'
+  AND Order_DateTime >= '2026-01-01' AND Order_DateTime < '2026-10-01'"
+full_v2,Q21,medium,5 สาขาที่จัดส่งเดลิเวอรีใช้เวลาเฉลี่ยนานที่สุด,0,,"SELECT b.Branch_Name, AVG(TIMESTAMPDIFF(MINUTE, o.Order_DateTime, d.Delivered_At)) AS Avg_Delivery_Time_Minutes
+FROM Delivery d
+JOIN Orders o ON d.Order_ID = o.Order_ID
+JOIN Branch b ON o.Branch_ID = b.Branch_ID
+WHERE d.Delivery_Status = 'Delivered'
+  AND o.Order_Status <> 'Cancelled'
+  AND o.Order_DateTime < '2026-10-01'
+GROUP BY b.Branch_ID, b.Branch_Name
+ORDER BY Avg_Delivery_Time_Minutes DESC
+LIMIT 5"
+full_v2,Q22,medium,How many points were earned and redeemed in September 2026?,0,,"SELECT 
+    SUM(CASE WHEN Txn_Type = 'Earn' THEN Points_Change ELSE 0 END) AS Points_Earned,
+    SUM(CASE WHEN Txn_Type = 'Redeem' THEN ABS(Points_Change) ELSE 0 END) AS Points_Redeemed
+FROM Point_Transaction
+WHERE Created_At >= '2026-09-01' AND Created_At < '2026-10-01'"
+full_v2,Q23,hard,5 สาขาที่ยอดขายสุทธิเดือนกันยายนโตจากเดือนสิงหาคมมากที่สุดกี่เปอร์เซ็นต์,0,"503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+full_v2,Q24,hard,"For each store type, which product sold the most units in the last 6 months?",1,,"WITH product_performance AS (
+    SELECT
+        b.Store_Type,
+        p.Product_Name,
+        SUM(oi.Quantity) AS Total_Units
+    FROM Orders o
+    JOIN Order_Item oi ON o.Order_ID = oi.Order_ID
+    JOIN Branch b ON o.Branch_ID = b.Branch_ID
+    JOIN Product p ON oi.Product_ID = p.Product_ID
+    WHERE o.Order_Status <> 'Cancelled'
+      AND o.Order_DateTime >= '2026-04-01' AND o.Order_DateTime < '2026-10-01'
+    GROUP BY b.Store_Type, p.Product_ID, p.Product_Name
+),
+ranked_products AS (
+    SELECT
+        Store_Type,
+        Product_Name,
+        Total_Units,
+        RANK() OVER (PARTITION BY Store_Type ORDER BY Total_Units DESC) AS Product_Rank
+    FROM product_performance
+)
+SELECT Store_Type, Product_Name, Total_Units
+FROM ranked_products
+WHERE Product_Rank = 1"
+full_v2,Q25,hard,ลูกค้าที่เคยสั่งมากกว่า 20 ออเดอร์ แต่ไม่ได้สั่งเลยในเดือนกันยายน 2026 มีกี่คน,1,,"SELECT COUNT(*) AS Member_Count
+FROM v_member_summary
+WHERE Total_Orders > 20
+  AND Last_Order_At < '2026-09-01'"
+full_v2,Q26,hard,Which day of the week has the highest average daily net sales?,1,,"SELECT DAYNAME(Sales_Date) AS Day_of_Week, AVG(Daily_Total) AS Avg_Daily_Net_Sales
+FROM (
+    SELECT Sales_Date, SUM(Net_Sales) AS Daily_Total
+    FROM v_daily_branch_sales
+    WHERE Sales_Date < '2026-10-01'
+    GROUP BY Sales_Date
+) AS t
+GROUP BY Day_of_Week
+ORDER BY Avg_Daily_Net_Sales DESC
+LIMIT 1"
+full_v2,Q27,hard,ยอดขายสุทธิรายเดือนของปี 2026 พร้อมยอดสะสม,1,,"WITH monthly_sales AS (
+    SELECT DATE_FORMAT(Sales_Date, '%Y-%m') AS Month,
+           SUM(Net_Sales) AS Net_Sales
+    FROM v_daily_branch_sales
+    WHERE Sales_Date >= '2026-01-01' AND Sales_Date < '2026-10-01'
+    GROUP BY DATE_FORMAT(Sales_Date, '%Y-%m')
+)
+SELECT Month,
+       Net_Sales,
+       SUM(Net_Sales) OVER (ORDER BY Month) AS Cumulative_Net_Sales
+FROM monthly_sales
+ORDER BY Month"
+full_v2,Q28,hard,What percentage of members who ordered in August 2026 also ordered in September 2026?,1,,"WITH aug_members AS (
+    SELECT DISTINCT Member_ID
+    FROM Orders
+    WHERE Order_Status <> 'Cancelled'
+      AND Order_DateTime >= '2026-08-01' AND Order_DateTime < '2026-09-01'
+      AND Member_ID IS NOT NULL
+),
+sep_members AS (
+    SELECT DISTINCT Member_ID
+    FROM Orders
+    WHERE Order_Status <> 'Cancelled'
+      AND Order_DateTime >= '2026-09-01' AND Order_DateTime < '2026-10-01'
+      AND Member_ID IS NOT NULL
+)
+SELECT ROUND(100.0 * COUNT(s.Member_ID) / COUNT(a.Member_ID), 2) AS Retention_Rate_Pct
+FROM aug_members a
+LEFT JOIN sep_members s ON a.Member_ID = s.Member_ID"
+full_v2,Q29,hard,3 สาขาที่มีสัดส่วนออเดอร์ที่ใช้โปรโมชันสูงที่สุดในปี 2026,1,,"SELECT b.Branch_Name,
+       COUNT(o.Promotion_ID) AS Promotion_Orders,
+       COUNT(*) AS Total_Orders,
+       ROUND(100 * COUNT(o.Promotion_ID) / COUNT(*), 2) AS Promo_Ratio_Pct
+FROM Orders o
+JOIN Branch b ON o.Branch_ID = b.Branch_ID
+WHERE o.Order_Status <> 'Cancelled'
+  AND o.Order_DateTime >= '2026-01-01' AND o.Order_DateTime < '2026-10-01'
+GROUP BY b.Branch_ID, b.Branch_Name
+ORDER BY Promo_Ratio_Pct DESC
+LIMIT 3"
+full_v2,Q30,hard,"Which branch had the highest net sales on a single day in 2026, and on which date?",1,,"SELECT Branch_Name, Sales_Date, Net_Sales
+FROM v_daily_branch_sales
+WHERE Sales_Date >= '2026-01-01' AND Sales_Date < '2026-10-01'
+ORDER BY Net_Sales DESC
+LIMIT 1"
